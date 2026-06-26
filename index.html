@@ -54,7 +54,18 @@ th,td{border-bottom:1px solid var(--border);padding:10px 8px;text-align:left;ver
 <body>
 <div class="wrap">
 <h1>测试日志分析器</h1>
-<p class="sub">选择含 <code>testcases</code> 的 standard_* 日志目录，在浏览器本地分析（不上传服务器）。功能与桌面版 v2 一致。</p>
+<p class="sub">选择含 <code>testcases</code> 的 standard_* 日志目录，在浏览器本地分析（不上传服务器）。功能与桌面版 v2 一致。
+  
+  ## 日志目录结构要求:
+```
+standard_20260617_190450/
+  testcases/
+    test_149803/
+      case_log.txt
+      ctrl_log.txt
+      mod_log.txt
+```
+</p>
 
 <div class="upload-panel" id="uploadPanel">
 <p>请点击下方按钮，选中自动化日志根目录（例如 <code>standard_20260617_190450</code> 或 <code>2026.6.26.12.39.59</code>）。<br>推荐使用 <strong>Chrome</strong> 或 <strong>Edge</strong>。</p>
