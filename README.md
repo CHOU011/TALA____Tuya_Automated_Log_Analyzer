@@ -10,7 +10,7 @@
 - 复制失败用例 ID
 - 每条用例「查看日志」：Case / Ctrl / Mod 三个 Tab
 - 复制当前日志
-- 下载独立 `report.html`（与 v2 桌面版格式兼容）
+- 下载独立 `report.html`
 
 ## 使用（本机）
 
