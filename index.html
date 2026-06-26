@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>测试日志分析器</title>
+<style>
+:root{--bg:#0f1419;--panel:#1a2332;--panel-2:#243044;--border:#2d3a4f;--text:#e7ecf3;--muted:#8b9cb3;--pass:#22c55e;--fail:#ef4444;--accent:#3b82f6;--warn:#fbbf24}
+*{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:radial-gradient(ellipse at top,#1a2744 0%,var(--bg) 55%);color:var(--text);min-height:100vh}
+.wrap{max-width:1400px;margin:0 auto;padding:24px 16px 48px}
+h1{margin:0 0 8px;font-size:1.75rem}.sub{color:var(--muted);font-size:.9rem;margin-bottom:20px;line-height:1.5}
+.upload-panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px}
+.upload-panel p{margin:0 0 16px;color:var(--muted);line-height:1.6}
+.upload-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input[type=file]{display:none}
+input,select,button{background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;font:inherit}
+input[type=text]{min-width:240px;flex:1;cursor:text}
+button:hover,select:hover{border-color:var(--accent)}
+button.primary{background:rgba(59,130,246,.2);border-color:rgba(59,130,246,.45);color:#bfdbfe}
+button:disabled{opacity:.55;cursor:not-allowed}
+.status-msg{margin-top:14px;font-size:.9rem;color:var(--muted)}.status-msg.error{color:#fca5a5}.status-msg.ok{color:#86efac}
+.privacy{font-size:.8rem;color:var(--muted);margin-top:12px}
+#reportSection[hidden]{display:none!important}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}.card .label{color:var(--muted);font-size:.85rem}.card .value{font-size:1.8rem;font-weight:700;margin-top:6px}
+.card.pass .value{color:var(--pass)}.card.fail .value{color:var(--fail)}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+.panel h2{margin:0 0 12px;font-size:1.05rem}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.tags{display:flex;flex-wrap:wrap;gap:8px}.tag{background:var(--panel-2);border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:.82rem;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{border-bottom:1px solid var(--border);padding:10px 8px;text-align:left;vertical-align:top}th{color:var(--muted)}
+.status-badge{padding:2px 8px;border-radius:999px;font-size:.78rem;font-weight:700}
+.status-badge.PASS{background:rgba(34,197,94,.15);color:var(--pass)}.status-badge.FAIL{background:rgba(239,68,68,.15);color:var(--fail)}
+.reason{color:#fca5a5;max-width:360px;word-break:break-word}
+.btn-log{background:rgba(59,130,246,.15);color:#93c5fd;border-color:rgba(59,130,246,.35);white-space:nowrap}
+.btn-log:hover{background:rgba(59,130,246,.28)}
+.modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,.72);display:none;align-items:center;justify-content:center;padding:20px;z-index:1000}
+.modal-backdrop.open{display:flex}
+.modal{width:min(1100px,96vw);max-height:90vh;background:var(--panel);border:1px solid var(--border);border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.45)}
+.modal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border)}
+.modal-title{font-size:1.05rem;font-weight:700}.modal-meta{color:var(--muted);font-size:.82rem;margin-top:4px;line-height:1.5}
+.modal-actions{display:flex;gap:8px;flex-wrap:wrap}
+.tab-bar{display:flex;gap:8px;padding:12px 18px 0;border-bottom:1px solid var(--border)}
+.tab-btn{background:transparent;border:none;border-bottom:2px solid transparent;border-radius:8px 8px 0 0;padding:10px 14px;color:var(--muted)}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--accent);background:rgba(59,130,246,.08)}
+.log-panel{padding:14px 18px 18px;overflow:auto;flex:1}
+.log-meta{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px;color:var(--muted);font-size:.8rem}
+.log-viewer{margin:0;padding:14px;background:#0b1220;border:1px solid var(--border);border-radius:10px;white-space:pre-wrap;word-break:break-word;font:12px/1.55 Consolas,"Cascadia Mono",monospace;max-height:58vh;overflow:auto}
+.empty{padding:20px;text-align:center;color:var(--muted)}
+@media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>测试日志分析器</h1>
+<p class="sub">选择含 <code>testcases</code> 的 standard_* 日志目录，在浏览器本地分析（不上传服务器）。功能与桌面版 v2 一致。</p>
+
+<div class="upload-panel" id="uploadPanel">
+<p>请点击下方按钮，选中自动化日志根目录（例如 <code>standard_20260617_190450</code> 或 <code>2026.6.26.12.39.59</code>）。<br>推荐使用 <strong>Chrome</strong> 或 <strong>Edge</strong>。</p>
+<div class="upload-actions">
+<input type="file" id="folderInput" webkitdirectory directory multiple>
+<button type="button" class="primary" id="pickFolderBtn">选择日志目录</button>
+<button type="button" id="downloadReportBtn" disabled>下载 report.html</button>
+<button type="button" id="resetBtn" hidden>重新选择</button>
+</div>
+<div class="status-msg" id="statusMsg">等待选择目录…</div>
+<p class="privacy">隐私：所有日志仅在本地浏览器读取，不会上传到任何服务器。</p>
+</div>
+
+<section id="reportSection" hidden>
+<div class="sub" id="meta"></div>
+<div class="cards">
+<div class="card"><div class="label">总用例</div><div class="value" id="total">0</div></div>
+<div class="card pass"><div class="label">通过</div><div class="value" id="passed">0</div></div>
+<div class="card fail"><div class="label">失败</div><div class="value" id="failed">0</div></div>
+<div class="card"><div class="label">通过率</div><div class="value" id="passRate">0%</div></div>
+</div>
+<div class="panel"><h2>失败分类</h2><div class="tags" id="categories"></div></div>
+<div class="panel">
+<div class="toolbar">
+<input id="search" type="text" placeholder="搜索用例 ID / 文件夹 / 失败原因">
+<select id="statusFilter"><option value="ALL">全部状态</option><option value="PASS">仅 PASS</option><option value="FAIL">仅 FAIL</option></select>
+<select id="categoryFilter"><option value="ALL">全部分类</option></select>
+<button id="exportFailBtn" type="button">复制失败用例 ID</button>
+</div>
+<table><thead><tr><th>状态</th><th>用例 ID</th><th>文件夹</th><th>耗时</th><th>失败分类</th><th>失败原因</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table>
+<div class="empty" id="empty" hidden>没有匹配的用例</div>
+</div>
+</section>
+</div>
+
+<div class="modal-backdrop" id="logModal" aria-hidden="true">
+<div class="modal" role="dialog" aria-modal="true" aria-labelledby="logModalTitle">
+<div class="modal-header">
+<div>
+<div class="modal-title" id="logModalTitle">用例日志</div>
+<div class="modal-meta" id="logModalMeta"></div>
+</div>
+<div class="modal-actions">
+<button id="copyLogBtn" type="button">复制当前日志</button>
+<button id="closeLogBtn" type="button">关闭</button>
+</div>
+</div>
+<div class="tab-bar">
+<button class="tab-btn active" data-tab="case" type="button">Case Log</button>
+<button class="tab-btn" data-tab="ctrl" type="button">Ctrl Log</button>
+<button class="tab-btn" data-tab="mod" type="button">Mod Log</button>
+</div>
+<div class="log-panel">
+<div class="log-meta"><span id="logFileName"></span><span id="logLineCount"></span></div>
+<pre class="log-viewer" id="logViewer"></pre>
+</div>
+</div>
+</div>
+
+<script>
+(function () {
+"use strict";
+
+const FAIL_KEYWORDS = [
+  "netcfg failed",
+  "设备配网激活失败",
+  "设备未成功进入云模式",
+  "OTA失败",
+  "超时未",
+];
+
+const CASE_START_RE = /\[\s*CASE\s*\]:\s*>{10,}\s*【([^】]+)】/;
+const CASE_END_RE = /\[\s*CASE\s*\]:\s*<{10,}\s*【([^】]+)】/;
+const LOG_LINE_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\s+\[\s*([^\]]+?)\s*\]:\s*(.*)$/;
+const ASSERTION_RE = /^AssertionError:\s*(.+)$/;
+const SDK_VERSION_RE = /SDK版本:\s*([^,]+)/;
+const FIRMWARE_RE = /当前固件版本:\s*(\S+)/;
+const PRODUCT_RE = /产品ID:\s*(\S+)/;
+const CASE_FILE_RE = /(?:^|\/)(?:testcases\/)?(test_[^/]+)\/(case_log|ctrl_log|mod_log|adb_logcat)\.txt$/i;
+
+let DATA = null;
+let activeCase = null;
+let activeTab = "case";
+
+const TAB_LABELS = { case: "Case Log", ctrl: "Ctrl Log", mod: "Mod Log" };
+
+const folderInput = document.getElementById("folderInput");
+const pickFolderBtn = document.getElementById("pickFolderBtn");
+const downloadReportBtn = document.getElementById("downloadReportBtn");
+const resetBtn = document.getElementById("resetBtn");
+const statusMsg = document.getElementById("statusMsg");
+const reportSection = document.getElementById("reportSection");
+const rowsEl = document.getElementById("rows");
+const emptyEl = document.getElementById("empty");
+const categoryFilter = document.getElementById("categoryFilter");
+const searchInput = document.getElementById("search");
+const statusFilter = document.getElementById("statusFilter");
+const logModal = document.getElementById("logModal");
+
+function parseTimestamp(value) {
+  const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}),(\d{3})$/);
+  if (!m) return null;
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6], +m[7]);
+}
+
+function extractFailureReason(lines) {
+  for (const line of lines) {
+    const stripped = line.trim();
+    const match = stripped.match(ASSERTION_RE);
+    if (match) return match[1].trim();
+    if (stripped.startsWith("AssertionError:")) {
+      return stripped.split(":", 2)[1].trim();
+    }
+    if (stripped.includes("netcfg failed")) return stripped;
+  }
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const stripped = lines[i].trim();
+    if (!stripped || stripped.startsWith("File ")) continue;
+    if (stripped.includes("Error") || stripped.includes("失败") || /failed/i.test(stripped)) {
+      return stripped;
+    }
+  }
+  return null;
+}
+
+function categorizeFailure(reason) {
+  if (!reason) return "未知错误";
+  const text = reason.toLowerCase();
+  if (reason.includes("配网") || text.includes("netcfg")) return "配网失败";
+  if (text.includes("ota") || reason.includes("升级") || reason.includes("固件")) return "OTA/固件";
+  if (reason.includes("云模式") || text.includes("mqtt") || reason.includes("连云")) return "连云/MQTT";
+  if (reason.includes("超时") || text.includes("timeout")) return "超时";
+  if (text.includes("wifi") || text.includes("ssid")) return "WiFi";
+  if (reason.includes("断言") || text.includes("assert")) return "断言失败";
+  return "其他";
+}
+
+function parseCaseLog(folderName, caseText, files, relPrefix) {
+  const lines = caseText.split(/\r?\n/);
+  let caseIds = [];
+  let startTime = null;
+  let endTime = null;
+  let startDt = null;
+  let endDt = null;
+  const warnings = [];
+  let sdkVersion = null;
+  let firmwareVersion = null;
+  let productId = null;
+  const hasTraceback = caseText.includes("Traceback (most recent call last)");
+
+  for (const line of lines) {
+    const startMatch = line.match(CASE_START_RE);
+    if (startMatch) {
+      caseIds = startMatch[1].split(",").map((s) => s.trim()).filter(Boolean);
+      const lineMatch = line.match(LOG_LINE_RE);
+      if (lineMatch) {
+        startTime = lineMatch[1];
+        startDt = parseTimestamp(startTime);
+      }
+      continue;
+    }
+    const endMatch = line.match(CASE_END_RE);
+    if (endMatch) {
+      const lineMatch = line.match(LOG_LINE_RE);
+      if (lineMatch) {
+        endTime = lineMatch[1];
+        endDt = parseTimestamp(endTime);
+      }
+    }
+    const sdkMatch = line.match(SDK_VERSION_RE);
+    if (sdkMatch) sdkVersion = sdkMatch[1].trim();
+    const fwMatch = line.match(FIRMWARE_RE);
+    if (fwMatch) firmwareVersion = fwMatch[1].trim();
+    const pidMatch = line.match(PRODUCT_RE);
+    if (pidMatch) productId = pidMatch[1].trim();
+    for (const keyword of FAIL_KEYWORDS) {
+      if (line.includes(keyword) && !line.includes("Traceback")) {
+        const msg = line.trim();
+        if (!warnings.includes(msg)) warnings.push(msg);
+      }
+    }
+  }
+
+  let durationSec = null;
+  if (startDt && endDt) durationSec = Math.max(0, (endDt - startDt) / 1000);
+
+  let failureReason = null;
+  let status = "PASS";
+  if (hasTraceback || caseText.includes("AssertionError")) {
+    failureReason = extractFailureReason(lines);
+    status = "FAIL";
+  }
+  const failureCategory = status === "FAIL" ? categorizeFailure(failureReason) : "";
+
+  const base = relPrefix ? `${relPrefix}/${folderName}` : folderName;
+  const caseLogPath = `${base}/case_log.txt`;
+  const ctrlLogPath = files.ctrl ? `${base}/ctrl_log.txt` : "";
+  const modLogPath = files.mod ? `${base}/mod_log.txt` : "";
+  const adbLogPath = files.adb ? `${base}/adb_logcat.txt` : "";
+
+  return {
+    folder: folderName,
+    case_ids: caseIds.length ? caseIds : [folderName.replace(/^test_/, "")],
+    case_id_text: (caseIds.length ? caseIds : [folderName.replace(/^test_/, "")]).join(","),
+    status,
+    start_time: startTime || "",
+    end_time: endTime || "",
+    duration_sec: durationSec,
+    duration_text: durationSec != null ? `${durationSec.toFixed(1)}s` : "-",
+    failure_reason: failureReason || "",
+    failure_category: failureCategory,
+    warnings,
+    sdk_version: sdkVersion || "",
+    firmware_version: firmwareVersion || "",
+    product_id: productId || "",
+    case_log_path: caseLogPath,
+    ctrl_log_path: ctrlLogPath,
+    mod_log_path: modLogPath,
+    adb_log_path: adbLogPath,
+  };
+}
+
+function extractRunName(relativePath) {
+  const norm = relativePath.replace(/\\/g, "/");
+  const idx = norm.indexOf("/testcases/");
+  if (idx > 0) return norm.slice(0, idx);
+  if (norm.startsWith("testcases/")) return "selected";
+  const parts = norm.split("/");
+  return parts.length > 1 ? parts[0] : "selected";
+}
+
+async function ingestFolder(fileList) {
+  const caseMap = new Map();
+  let runName = "";
+
+  const readers = [];
+  for (const file of fileList) {
+    const rel = file.webkitRelativePath || file.name;
+    const norm = rel.replace(/\\/g, "/");
+    const match = norm.match(CASE_FILE_RE);
+    if (!match) continue;
+    if (!runName) runName = extractRunName(norm);
+    const folder = match[1];
+    const kind = match[2].toLowerCase();
+    if (!caseMap.has(folder)) {
+      const prefixMatch = norm.match(/^(.*\/testcases)\//);
+      caseMap.set(folder, {
+        files: {},
+        relPrefix: prefixMatch ? prefixMatch[1] : "testcases",
+      });
+    }
+    const entry = caseMap.get(folder);
+    const key = kind === "case_log" ? "case" : kind === "ctrl_log" ? "ctrl" : kind === "mod_log" ? "mod" : "adb";
+    readers.push(
+      file.text().then((text) => {
+        entry.files[key] = text;
+        entry.files[`${key}Name`] = norm;
+      })
+    );
+  }
+
+  await Promise.all(readers);
+
+  if (!caseMap.size) {
+    throw new Error("未找到 testcases/test_*/case_log.txt，请确认选择的是 standard_* 根目录。");
+  }
+
+  const folders = Array.from(caseMap.keys()).sort();
+  const results = [];
+  const caseLogs = {};
+
+  for (const folder of folders) {
+    const { files, relPrefix } = caseMap.get(folder);
+    if (!files.case) continue;
+    const row = parseCaseLog(folder, files.case, files, relPrefix);
+    results.push(row);
+    caseLogs[folder] = {
+      case: files.case || "",
+      ctrl: files.ctrl || "",
+      mod: files.mod || "",
+    };
+  }
+
+  if (!results.length) {
+    throw new Error("目录下没有可解析的 case_log.txt。");
+  }
+
+  const passed = results.filter((r) => r.status === "PASS").length;
+  const failed = results.length - passed;
+  const categoryStats = {};
+  for (const item of results) {
+    if (item.status !== "FAIL") continue;
+    const cat = item.failure_category || "未知错误";
+    categoryStats[cat] = (categoryStats[cat] || 0) + 1;
+  }
+  const sortedStats = Object.fromEntries(
+    Object.entries(categoryStats).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  );
+
+  return {
+    run_name: runName || "selected",
+    root_path: runName || "(浏览器本地选择)",
+    total: results.length,
+    passed,
+    failed,
+    pass_rate: results.length ? Math.round((passed * 10000) / results.length) / 100 : 0,
+    category_stats: sortedStats,
+    analyzed_at: new Date().toLocaleString("sv-SE").replace("T", " ").slice(0, 19),
+    results,
+    case_logs: caseLogs,
+  };
+}
+
+function escapeHtml(t) {
+  return String(t)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function basename(path) {
+  if (!path) return "";
+  const parts = String(path).split(/[\\/]/);
+  return parts[parts.length - 1] || "";
+}
+
+function renderReport() {
+  if (!DATA) return;
+  document.getElementById("meta").textContent =
+    `批次: ${DATA.run_name} | 路径: ${DATA.root_path} | 分析时间: ${DATA.analyzed_at}`;
+  document.getElementById("total").textContent = DATA.total;
+  document.getElementById("passed").textContent = DATA.passed;
+  document.getElementById("failed").textContent = DATA.failed;
+  document.getElementById("passRate").textContent = `${DATA.pass_rate}%`;
+
+  const categoriesEl = document.getElementById("categories");
+  const categoryNames = Object.keys(DATA.category_stats);
+  categoryFilter.innerHTML = '<option value="ALL">全部分类</option>';
+  if (!categoryNames.length) {
+    categoriesEl.innerHTML = '<span class="tag">无失败用例</span>';
+  } else {
+    categoriesEl.innerHTML = categoryNames
+      .map((n) => `<span class="tag">${escapeHtml(n)}: ${DATA.category_stats[n]}</span>`)
+      .join("");
+    for (const n of categoryNames) {
+      const o = document.createElement("option");
+      o.value = n;
+      o.textContent = n;
+      categoryFilter.appendChild(o);
+    }
+  }
+  renderRows();
+}
+
+function renderRows() {
+  const keyword = searchInput.value.trim().toLowerCase();
+  const status = statusFilter.value;
+  const category = categoryFilter.value;
+  const filtered = DATA.results.filter((item) => {
+    if (status !== "ALL" && item.status !== status) return false;
+    if (category !== "ALL" && item.failure_category !== category) return false;
+    if (!keyword) return true;
+    return [item.case_id_text, item.folder, item.failure_reason, item.failure_category, ...(item.warnings || [])]
+      .join(" ")
+      .toLowerCase()
+      .includes(keyword);
+  });
+  rowsEl.innerHTML = filtered
+    .map(
+      (item) => `<tr>
+<td><span class="status-badge ${item.status}">${item.status}</span></td>
+<td>${escapeHtml(item.case_id_text)}</td>
+<td>${escapeHtml(item.folder)}</td>
+<td>${escapeHtml(item.duration_text)}</td>
+<td>${escapeHtml(item.failure_category || "-")}</td>
+<td class="reason">${escapeHtml(item.failure_reason || "-")}</td>
+<td><button class="btn-log" type="button" data-folder="${escapeHtml(item.folder)}">查看日志</button></td>
+</tr>`
+    )
+    .join("");
+  emptyEl.hidden = filtered.length !== 0;
+}
+
+function getLogBundle(item) {
+  return (DATA.case_logs && DATA.case_logs[item.folder]) || { case: "", ctrl: "", mod: "" };
+}
+
+function getLogPath(item, tab) {
+  if (tab === "case") return item.case_log_path || "";
+  if (tab === "ctrl") return item.ctrl_log_path || "";
+  return item.mod_log_path || "";
+}
+
+function renderLogTab() {
+  if (!activeCase) return;
+  const bundle = getLogBundle(activeCase);
+  const text = bundle[activeTab] || "";
+  const path = getLogPath(activeCase, activeTab);
+  const lines = text ? text.split(/\r?\n/).length : 0;
+  document.getElementById("logModalTitle").textContent = `用例 ${activeCase.case_id_text} 日志`;
+  document.getElementById("logModalMeta").textContent =
+    `${activeCase.folder} | ${activeCase.start_time || "-"} ~ ${activeCase.end_time || "-"} | ${activeCase.duration_text}`;
+  document.getElementById("logFileName").textContent = path ? basename(path) : `${TAB_LABELS[activeTab]}（无文件路径）`;
+  document.getElementById("logLineCount").textContent = text ? `${lines} 行` : "0 行";
+  document.getElementById("logViewer").textContent = text || "（该日志文件不存在或为空）";
+}
+
+function openLogModal(folder) {
+  const item = DATA.results.find((row) => row.folder === folder);
+  if (!item) return;
+  activeCase = item;
+  activeTab = "case";
+  document.querySelectorAll(".tab-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === "case"));
+  renderLogTab();
+  logModal.classList.add("open");
+  logModal.setAttribute("aria-hidden", "false");
+}
+
+function closeLogModal() {
+  logModal.classList.remove("open");
+  logModal.setAttribute("aria-hidden", "true");
+  activeCase = null;
+}
+
+function buildStandaloneReportHtml(payload) {
+  const dataJson = JSON.stringify(payload);
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>测试日志分析报告</title>
+<style>
+:root{--bg:#0f1419;--panel:#1a2332;--panel-2:#243044;--border:#2d3a4f;--text:#e7ecf3;--muted:#8b9cb3;--pass:#22c55e;--fail:#ef4444;--accent:#3b82f6}
+*{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:radial-gradient(ellipse at top,#1a2744 0%,var(--bg) 55%);color:var(--text)}
+.wrap{max-width:1400px;margin:0 auto;padding:24px 16px 48px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}.card .label{color:var(--muted);font-size:.85rem}.card .value{font-size:1.8rem;font-weight:700;margin-top:6px}
+.card.pass .value{color:var(--pass)}.card.fail .value{color:var(--fail)}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+input,select,button{background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer}
+input{min-width:240px;flex:1;cursor:text}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{border-bottom:1px solid var(--border);padding:10px 8px;text-align:left;vertical-align:top}th{color:var(--muted)}.status{padding:2px 8px;border-radius:999px;font-size:.78rem;font-weight:700}
+.status.PASS{background:rgba(34,197,94,.15);color:var(--pass)}.status.FAIL{background:rgba(239,68,68,.15);color:var(--fail)}.reason{color:#fca5a5;max-width:360px;word-break:break-word}
+.btn-log{background:rgba(59,130,246,.15);color:#93c5fd;border-color:rgba(59,130,246,.35);white-space:nowrap}
+.modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,.72);display:none;align-items:center;justify-content:center;padding:20px;z-index:1000}
+.modal-backdrop.open{display:flex}
+.modal{width:min(1100px,96vw);max-height:90vh;background:var(--panel);border:1px solid var(--border);border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+.modal-header{display:flex;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border)}
+.tab-bar{display:flex;gap:8px;padding:12px 18px 0;border-bottom:1px solid var(--border)}
+.tab-btn{background:transparent;border:none;border-bottom:2px solid transparent;padding:10px 14px;color:var(--muted)}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--accent)}
+.log-panel{padding:14px 18px 18px;overflow:auto;flex:1}
+.log-viewer{margin:0;padding:14px;background:#0b1220;border:1px solid var(--border);border-radius:10px;white-space:pre-wrap;word-break:break-word;font:12px/1.55 Consolas,monospace;max-height:58vh;overflow:auto}
+.tag{background:var(--panel-2);border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:.82rem;color:var(--muted);margin-right:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>测试日志分析报告</h1>
+<div class="sub" id="meta"></div>
+<div class="cards">
+<div class="card"><div class="label">总用例</div><div class="value" id="total">0</div></div>
+<div class="card pass"><div class="label">通过</div><div class="value" id="passed">0</div></div>
+<div class="card fail"><div class="label">失败</div><div class="value" id="failed">0</div></div>
+<div class="card"><div class="label">通过率</div><div class="value" id="passRate">0%</div></div>
+</div>
+<div class="panel"><h2>失败分类</h2><div class="tags" id="categories"></div></div>
+<div class="panel">
+<div class="toolbar">
+<input id="search" placeholder="搜索用例 ID / 文件夹 / 失败原因">
+<select id="statusFilter"><option value="ALL">全部状态</option><option value="PASS">仅 PASS</option><option value="FAIL">仅 FAIL</option></select>
+<select id="categoryFilter"><option value="ALL">全部分类</option></select>
+<button id="exportFailBtn" type="button">复制失败用例 ID</button>
+</div>
+<table><thead><tr><th>状态</th><th>用例 ID</th><th>文件夹</th><th>耗时</th><th>失败分类</th><th>失败原因</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table>
+<div class="empty" id="empty" hidden>没有匹配的用例</div>
+</div></div>
+<div class="modal-backdrop" id="logModal" aria-hidden="true">
+<div class="modal">
+<div class="modal-header"><div><div id="logModalTitle"></div><div id="logModalMeta"></div></div>
+<div><button id="copyLogBtn" type="button">复制当前日志</button><button id="closeLogBtn" type="button">关闭</button></div></div>
+<div class="tab-bar">
+<button class="tab-btn active" data-tab="case" type="button">Case Log</button>
+<button class="tab-btn" data-tab="ctrl" type="button">Ctrl Log</button>
+<button class="tab-btn" data-tab="mod" type="button">Mod Log</button>
+</div>
+<div class="log-panel"><div><span id="logFileName"></span> <span id="logLineCount"></span></div><pre class="log-viewer" id="logViewer"></pre></div>
+</div></div>
+<script>
+const DATA=${dataJson};
+const TAB_LABELS={case:"Case Log",ctrl:"Ctrl Log",mod:"Mod Log"};
+const rowsEl=document.getElementById("rows"),emptyEl=document.getElementById("empty"),categoryFilter=document.getElementById("categoryFilter"),searchInput=document.getElementById("search"),statusFilter=document.getElementById("statusFilter");
+const logModal=document.getElementById("logModal");
+let activeCase=null,activeTab="case";
+document.getElementById("meta").textContent=\`批次: \${DATA.run_name} | 路径: \${DATA.root_path} | 分析时间: \${DATA.analyzed_at}\`;
+document.getElementById("total").textContent=DATA.total;document.getElementById("passed").textContent=DATA.passed;document.getElementById("failed").textContent=DATA.failed;document.getElementById("passRate").textContent=\`\${DATA.pass_rate}%\`;
+const categoriesEl=document.getElementById("categories"),categoryNames=Object.keys(DATA.category_stats);
+if(!categoryNames.length){categoriesEl.innerHTML='<span class="tag">无失败用例</span>';}else{categoriesEl.innerHTML=categoryNames.map(n=>\`<span class="tag">\${n}: \${DATA.category_stats[n]}</span>\`).join("");categoryNames.forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;categoryFilter.appendChild(o);});}
+function escapeHtml(t){return String(t).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");}
+function basename(path){if(!path)return"";return String(path).split(/[\\\\/]/).pop()||"";}
+function renderRows(){const keyword=searchInput.value.trim().toLowerCase(),status=statusFilter.value,category=categoryFilter.value;const filtered=DATA.results.filter(item=>{if(status!=="ALL"&&item.status!==status)return false;if(category!=="ALL"&&item.failure_category!==category)return false;if(!keyword)return true;return [item.case_id_text,item.folder,item.failure_reason,item.failure_category,...(item.warnings||[])].join(" ").toLowerCase().includes(keyword);});rowsEl.innerHTML=filtered.map(item=>\`<tr><td><span class="status \${item.status}">\${item.status}</span></td><td>\${escapeHtml(item.case_id_text)}</td><td>\${escapeHtml(item.folder)}</td><td>\${escapeHtml(item.duration_text)}</td><td>\${escapeHtml(item.failure_category||"-")}</td><td class="reason">\${escapeHtml(item.failure_reason||"-")}</td><td><button class="btn-log" type="button" data-folder="\${escapeHtml(item.folder)}">查看日志</button></td></tr>\`).join("");emptyEl.hidden=filtered.length!==0;}
+function getLogBundle(item){return (DATA.case_logs&&DATA.case_logs[item.folder])||{case:"",ctrl:"",mod:""};}
+function getLogPath(item,tab){if(tab==="case")return item.case_log_path||"";if(tab==="ctrl")return item.ctrl_log_path||"";return item.mod_log_path||"";}
+function renderLogTab(){if(!activeCase)return;const bundle=getLogBundle(activeCase);const text=bundle[activeTab]||"";const path=getLogPath(activeCase,activeTab);const lines=text?text.split(/\\r?\\n/).length:0;document.getElementById("logModalTitle").textContent=\`用例 \${activeCase.case_id_text} 日志\`;document.getElementById("logModalMeta").textContent=\`\${activeCase.folder} | \${activeCase.start_time||"-"} ~ \${activeCase.end_time||"-"} | \${activeCase.duration_text}\`;document.getElementById("logFileName").textContent=path?basename(path):TAB_LABELS[activeTab];document.getElementById("logLineCount").textContent=text?\`\${lines} 行\`:"0 行";document.getElementById("logViewer").textContent=text||"（该日志文件不存在或为空）";}
+function openLogModal(folder){const item=DATA.results.find(row=>row.folder===folder);if(!item)return;activeCase=item;activeTab="case";document.querySelectorAll(".tab-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab==="case"));renderLogTab();logModal.classList.add("open");}
+function closeLogModal(){logModal.classList.remove("open");activeCase=null;}
+rowsEl.addEventListener("click",e=>{const btn=e.target.closest(".btn-log");if(btn)openLogModal(btn.dataset.folder);});
+document.querySelectorAll(".tab-btn").forEach(btn=>btn.addEventListener("click",()=>{activeTab=btn.dataset.tab;document.querySelectorAll(".tab-btn").forEach(t=>t.classList.toggle("active",t===btn));renderLogTab();}));
+document.getElementById("closeLogBtn").addEventListener("click",closeLogModal);
+logModal.addEventListener("click",e=>{if(e.target===logModal)closeLogModal();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&logModal.classList.contains("open"))closeLogModal();});
+document.getElementById("copyLogBtn").addEventListener("click",async()=>{if(!activeCase)return;const text=getLogBundle(activeCase)[activeTab]||"";if(!text){alert("当前日志为空");return;}try{await navigator.clipboard.writeText(text);alert(\`已复制 \${TAB_LABELS[activeTab]}\`);}catch(err){prompt("复制以下内容：",text);}});
+searchInput.addEventListener("input",renderRows);statusFilter.addEventListener("change",renderRows);categoryFilter.addEventListener("change",renderRows);
+document.getElementById("exportFailBtn").addEventListener("click",async()=>{const ids=DATA.results.filter(i=>i.status==="FAIL").map(i=>i.case_id_text);const text=ids.join("\\n");try{await navigator.clipboard.writeText(text);alert(\`已复制 \${ids.length} 个失败用例 ID\`);}catch(err){prompt("复制失败用例 ID：",text);}});
+renderRows();
+<\/script>
+</body>
+</html>`;
+}
+
+function downloadReport() {
+  if (!DATA) return;
+  const html = buildStandaloneReportHtml(DATA);
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "report.html";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function handleFolderSelect(event) {
+  const files = event.target.files;
+  if (!files || !files.length) return;
+  pickFolderBtn.disabled = true;
+  statusMsg.className = "status-msg";
+  statusMsg.textContent = `正在读取 ${files.length} 个文件…`;
+  try {
+    DATA = await ingestFolder(files);
+    reportSection.hidden = false;
+    downloadReportBtn.disabled = false;
+    resetBtn.hidden = false;
+    statusMsg.className = "status-msg ok";
+    statusMsg.textContent = `分析完成：共 ${DATA.total} 条用例，通过 ${DATA.passed}，失败 ${DATA.failed}。`;
+    renderReport();
+    reportSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    statusMsg.className = "status-msg error";
+    statusMsg.textContent = `分析失败：${err.message || err}`;
+    reportSection.hidden = true;
+    downloadReportBtn.disabled = true;
+  } finally {
+    pickFolderBtn.disabled = false;
+  }
+}
+
+pickFolderBtn.addEventListener("click", () => folderInput.click());
+folderInput.addEventListener("change", handleFolderSelect);
+downloadReportBtn.addEventListener("click", downloadReport);
+resetBtn.addEventListener("click", () => {
+  folderInput.value = "";
+  DATA = null;
+  reportSection.hidden = true;
+  downloadReportBtn.disabled = true;
+  resetBtn.hidden = true;
+  statusMsg.className = "status-msg";
+  statusMsg.textContent = "等待选择目录…";
+  closeLogModal();
+});
+
+rowsEl.addEventListener("click", (event) => {
+  const btn = event.target.closest(".btn-log");
+  if (btn) openLogModal(btn.dataset.folder);
+});
+document.querySelectorAll(".tab-btn").forEach((btn) =>
+  btn.addEventListener("click", () => {
+    activeTab = btn.dataset.tab;
+    document.querySelectorAll(".tab-btn").forEach((tab) => tab.classList.toggle("active", tab === btn));
+    renderLogTab();
+  })
+);
+document.getElementById("closeLogBtn").addEventListener("click", closeLogModal);
+logModal.addEventListener("click", (event) => {
+  if (event.target === logModal) closeLogModal();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && logModal.classList.contains("open")) closeLogModal();
+});
+document.getElementById("copyLogBtn").addEventListener("click", async () => {
+  if (!activeCase) return;
+  const text = getLogBundle(activeCase)[activeTab] || "";
+  if (!text) {
+    alert("当前日志为空，无法复制。");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    alert(`已复制 ${TAB_LABELS[activeTab]}`);
+  } catch (e) {
+    prompt(`复制以下 ${TAB_LABELS[activeTab]}：`, text);
+  }
+});
+searchInput.addEventListener("input", renderRows);
+statusFilter.addEventListener("change", renderRows);
+categoryFilter.addEventListener("change", renderRows);
+document.getElementById("exportFailBtn").addEventListener("click", async () => {
+  if (!DATA) return;
+  const ids = DATA.results.filter((i) => i.status === "FAIL").map((i) => i.case_id_text);
+  const text = ids.join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    alert(`已复制 ${ids.length} 个失败用例 ID`);
+  } catch (e) {
+    prompt("复制以下失败用例 ID：", text);
+  }
+});
+})();
+</script>
+</body>
+</html>
