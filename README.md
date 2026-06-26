@@ -14,7 +14,7 @@
 
 ## 使用
 
-1. 打开 Pages 链接
+1. 打开 Pages 链接  https://chou011.github.io/TALA____Tuya_Automated_Log_Analyzer/
 2. 点击「选择日志目录」
 3. 选中含 `testcases` 的 `standard_*` 文件夹
 4. 等待分析完成，查看报告或下载 `report.html`
