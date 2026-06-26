@@ -14,26 +14,6 @@
 
 ## 使用（本机）
 
-用 Chrome 或 Edge 直接打开 `index.html`，或本地起一个静态服务：
-
-```powershell
-cd D:\ZZWORK\FOR_CURSOR\test-log-analyzer-web
-py -3 -m http.server 8080
-```
-
-浏览器访问 `http://localhost:8080`
-
-## 部署 GitHub Pages
-
-1. 新建 GitHub 仓库（例如 `test-log-analyzer`）
-2. 将本目录 **`index.html`** 推到仓库根目录（或 `docs/index.html`）
-3. 仓库 **Settings → Pages**
-   - Source: Deploy from a branch
-   - Branch: `main` / `root`（或 `main` / `/docs`）
-4. 等待几分钟后访问：`https://<用户名>.github.io/<仓库名>/`
-
-## 同事怎么用
-
 1. 打开 Pages 链接
 2. 点击「选择日志目录」
 3. 选中含 `testcases` 的 `standard_*` 文件夹
